@@ -14,6 +14,7 @@ import difflib
 from googletrans import Translator
 import sounddevice as sd
 import numpy as np
+# from scipy import signal  
 
 
 def initialize_session_state():
@@ -215,8 +216,22 @@ def main():
                 
         
     
-            
-            
+    # 구분선 추가
+    st.markdown("---")
+    
+    
+    st.write("""  
+    <div style='text-align: center;'>  
+        <h6>듣고 따라 읽기</h6>
+        <h2 style='text-align: center; color: rgb(205, 118, 242);'>Listen and Repeat</h2>
+        </br>
+        <h6>Play 버튼을 눌러 단어를 듣고</h6>
+        <h6>Mic 버튼을 눌러 음성을 녹음하세요</h6>
+    </div>  
+    """, unsafe_allow_html=True)
+
+
+
 
 
 if __name__ == "__main__":
