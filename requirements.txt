@@ -2,4 +2,4 @@ streamlit
 SpeechRecognition
 gtts
 googletrans
-PyAudio
+pyaudio
