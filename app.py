@@ -11,7 +11,3 @@ import os
 import random
 import time
 import difflib
-from googletrans import Translator
-import sounddevice as sd
-import numpy as np
-# from scipy import signal  
