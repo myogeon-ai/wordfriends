@@ -4,3 +4,4 @@ gtts
 googletrans
 sounddevice  
 numpy 
+audio-recorder-streamlit
