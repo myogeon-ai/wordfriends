@@ -215,53 +215,6 @@ def main():
                 
         
     
-    # 구분선 추가
-    st.markdown("---")
-    
-    
-    st.write("""  
-    <div style='text-align: center;'>  
-        <h6>듣고 따라 읽기</h6>
-        <h2 style='text-align: center; color: rgb(205, 118, 242);'>Listen and Repeat</h2>
-        </br>
-        <h6>Play 버튼을 눌러 단어를 듣고</h6>
-        <h6>Mic 버튼을 눌러 음성을 녹음하세요</h6>
-    </div>  
-    """, unsafe_allow_html=True)
-
-
-
-
-
-    # 사이드바에 점수 표시
-    st.sidebar.header("점수")
-    st.sidebar.write(f"정확도: {st.session_state.score}/{st.session_state.total_attempts if st.session_state.total_attempts > 0 else 1:.2%}")
-    
-    test = [1, 2, 3, 4, 5]
-    for i in test:
-        col1, col2 = st.columns([1, 1])
-        # 새 단어 받기 버튼
-        with col1: 
-            st.image(image_paths['Boy'], width=200, caption='Boy')
-        with col2: 
-            if st.button("PLAY", key="play_button_" + str(i)):
-                st.session_state.current_word = get_random_word()
-                audio_file = create_audio(st.session_state.current_word, st.session_state.selected_gender)
-                
-                # 단어와 발음 듣기 버튼 표시
-                st.write(f"## 이 단어를 읽어보세요: **{st.session_state.current_word}**")
-                st.audio(audio_file)
-                
-                # 한국어 의미 표시
-                translator = Translator()
-                try:
-                    korean_meaning = translator.translate(st.session_state.current_word, dest='ko').text
-                    st.write(f"단어 뜻: {korean_meaning}")
-                except:
-                    st.write("단어 뜻을 가져올 수 없습니다.")
-                
-                # 임시 파일 삭제
-                os.remove(audio_file)
             
             
 
