@@ -14,7 +14,6 @@ import difflib
 from googletrans import Translator
 import sounddevice as sd
 import numpy as np
-from scipy import signal  
 
 
 def initialize_session_state():
