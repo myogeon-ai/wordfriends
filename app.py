@@ -3,6 +3,7 @@
 # pip install gtts
 # pip install googletrans
 # pip install difflib   # 설치 안해도 사용가능
+# pip install sounddevice  
 import streamlit as st
 import speech_recognition as sr
 from gtts import gTTS
@@ -11,6 +12,10 @@ import random
 import time
 import difflib
 from googletrans import Translator
+import sounddevice as sd
+import numpy as np
+from scipy import signal  
+
 
 def initialize_session_state():
     """세션 상태 초기화"""
@@ -44,24 +49,46 @@ def create_audio(text, gender):
     tts.save(filename)
     return filename
 
-def speech_to_text():
-    """음성을 텍스트로 변환"""
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("말씀해주세요...")
-        try:
-            audio = r.listen(source, timeout=5, phrase_time_limit=5)
-            text = r.recognize_google(audio, language='en-US')
-            return text.lower()
-        except sr.WaitTimeoutError:
-            st.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")
-            return None
-        except sr.UnknownValueError:
-            st.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")
-            return None
-        except sr.RequestError:
-            st.error("음성 인식 서비스에 접근할 수 없습니다.")
-            return None
+
+def speech_to_text():  
+    """음성을 텍스트로 변환"""  
+    r = sr.Recognizer()  
+
+    # 오디오 녹음  
+    duration = 5  # 녹음 시간 (초)  
+    fs = 44100  # 샘플링 레이트  
+    recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)  
+    st.write("말씀해주세요...")  
+    sd.wait()  # 녹음 완료까지 기다림  
+
+    # 녹음된 오디오를 텍스트로 변환  
+    try:  
+        # 오디오 데이터 준비  
+        audio_data = recording.flatten()  
+        
+        # 음성 인식을 위해 int16 형식으로 변환  
+        audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()  
+        
+        # 음성 인식  
+        audio_data_for_recognition = sr.AudioData(audio_bytes, fs, 2)  
+        # text = r.recognize_google(audio_data_for_recognition, language='ko-KR')
+        text = r.recognize_google(audio_data_for_recognition, language='en-US')
+        return text.lower()  
+        
+    except sr.WaitTimeoutError:  
+        st.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+        return None  
+    except sr.UnknownValueError:  
+        st.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+        return None  
+    except sr.RequestError:  
+        st.error("음성 인식 서비스에 접근할 수 없습니다.")  
+        return None  
+    
+    
+    
+        
+    
 
 def calculate_similarity(word1, word2):
     """두 단어의 유사도 계산"""
