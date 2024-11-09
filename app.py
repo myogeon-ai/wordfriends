@@ -153,27 +153,27 @@ def speech_to_text():
     # 녹음된 오디오가 있을 경우 처리  
     # if audio_bytes:
     
-    try:  
-        # 잠시 대기하여 브라우저 처리 시간 제공  
-        time.sleep(0.5)
+    # try:  
+    # 잠시 대기하여 브라우저 처리 시간 제공  
+    time.sleep(0.5)
 
-        
-        # 녹음된 오디오 재생 가능하게 표시  
-        st.audio(audio_bytes, format="audio/wav")  
-        
-        status_placeholder.info("음성을 텍스트로 변환 중...")  
-        
-        # 음성 인식  
-        audio_data = sr.AudioData(audio_bytes,   
-                                sample_rate=44100,  
-                                sample_width=2)  
-        
-        # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
-        text = r.recognize_google(audio_data, language='en-US')  
+    
+    # 녹음된 오디오 재생 가능하게 표시  
+    st.audio(audio_bytes, format="audio/wav")  
+    
+    status_placeholder.info("음성을 텍스트로 변환 중...")  
+    
+    # 음성 인식  
+    audio_data = sr.AudioData(audio_bytes,   
+                            sample_rate=44100,  
+                            sample_width=2)  
+    
+    # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
+    text = r.recognize_google(audio_data, language='en-US')  
 
-        # 성공적으로 변환된 경우  
-        status_placeholder.success("음성 인식 완료!")  
-        return text.lower()  
+    # 성공적으로 변환된 경우  
+    status_placeholder.success("음성 인식 완료!")  
+    return text.lower()  
         
     # except sr.WaitTimeoutError:  
     #     status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
