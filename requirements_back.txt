@@ -4,4 +4,7 @@ SpeechRecognition
 gTTS
 googletrans
 sounddevice  
+numpy 
 audio-recorder-streamlit
+pydub
+av
