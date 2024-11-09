@@ -1,42 +1,46 @@
 import streamlit as st
-from audio_recorder_streamlit import audio_recorder
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import random
 from gtts import gTTS
-import os
-import tempfile
 import speech_recognition as sr
+import numpy as np
+import logging
+import av
+import queue
+import tempfile
+import os
 from io import BytesIO
 import base64
-import wave
-import logging
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 페이지 설정
-st.set_page_config(page_title="English Pronunciation Practice", layout="centered")
+st.set_page_config(
+    page_title="Pronunciation Practice",
+    page_icon="🎤",
+    layout="centered"
+)
 
-# CSS 스타일
+# 스타일 설정
 st.markdown("""
     <style>
-    .main { padding: 2rem; }
     .word-display {
-        font-size: 3rem;
+        font-size: 48px;
         font-weight: bold;
         text-align: center;
-        padding: 2rem;
-        margin: 1rem 0;
+        padding: 20px;
+        margin: 20px 0;
         background-color: #f0f2f6;
         border-radius: 10px;
     }
-    .status-area {
-        margin: 1rem 0;
-        padding: 1rem;
-        border-radius: 5px;
+    .stButton button {
+        width: 100%;
+        margin: 10px 0;
     }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # 세션 상태 초기화
 if 'words' not in st.session_state:
@@ -49,13 +53,12 @@ if 'words' not in st.session_state:
 if 'current_word' not in st.session_state:
     st.session_state.current_word = random.choice(st.session_state.words)
 
-if 'error_count' not in st.session_state:
-    st.session_state.error_count = 0
+if 'audio_buffer' not in st.session_state:
+    st.session_state.audio_buffer = []
 
 # TTS 함수
-@st.cache_data
-def get_tts_audio(text):
-    """텍스트를 음성으로 변환하고 base64 인코딩된 문자열 반환"""
+def get_audio_base64(text):
+    """텍스트를 음성으로 변환하고 base64로 인코딩"""
     try:
         tts = gTTS(text=text, lang='en')
         audio_buffer = BytesIO()
@@ -66,43 +69,27 @@ def get_tts_audio(text):
         logger.error(f"TTS error: {str(e)}")
         return None
 
-def process_audio(audio_bytes):
-    """오디오 바이트를 처리하여 텍스트로 변환"""
-    try:
-        # 임시 WAV 파일 생성
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
-            temp_wav_path = temp_wav.name
-            # WAV 파일로 저장
-            with wave.open(temp_wav_path, 'wb') as wav_file:
-                wav_file.setnchannels(1)  # 모노
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(44100)  # 샘플레이트
-                wav_file.writeframes(audio_bytes)
+# 음성 처리를 위한 클래스
+class AudioProcessor:
+    def __init__(self):
+        self.audio_buffer = []
+        self.recording = False
+        self.audio_queue = queue.Queue()
 
-            # 음성 인식
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(temp_wav_path) as source:
-                audio = recognizer.record(source)
-                try:
-                    text = recognizer.recognize_google(audio, language='en-US')
-                    return text.lower()
-                except sr.UnknownValueError:
-                    logger.warning("Speech not recognized")
-                    return None
-                except sr.RequestError as e:
-                    logger.error(f"Could not request results: {str(e)}")
-                    return None
-    except Exception as e:
-        logger.error(f"Error processing audio: {str(e)}")
-        return None
-    finally:
-        # 임시 파일 삭제
-        try:
-            os.unlink(temp_wav_path)
-        except Exception as e:
-            logger.error(f"Error removing temporary file: {str(e)}")
+    def process_audio(self, frame):
+        if self.recording:
+            sound = frame.to_ndarray()
+            self.audio_buffer.extend(sound.flatten().tolist())
 
-# 메인 앱 UI
+    def start_recording(self):
+        self.recording = True
+        self.audio_buffer = []
+
+    def stop_recording(self):
+        self.recording = False
+        return np.array(self.audio_buffer, dtype=np.int16)
+
+# 메인 앱
 st.title("English Pronunciation Practice")
 st.markdown("---")
 
@@ -111,75 +98,113 @@ st.markdown(f'<div class="word-display">{st.session_state.current_word}</div>', 
 
 # 발음 듣기 버튼
 if st.button("🔊 Listen to Pronunciation"):
-    audio_base64 = get_tts_audio(st.session_state.current_word)
+    audio_base64 = get_audio_base64(st.session_state.current_word)
     if audio_base64:
         st.markdown(f'<audio autoplay controls><source src="{audio_base64}"></audio>', unsafe_allow_html=True)
     else:
         st.error("Could not generate pronunciation audio. Please try again.")
 
-# 새로운 단어 선택
+# 새로운 단어 버튼
 if st.button("🔄 New Word"):
     st.session_state.current_word = random.choice(st.session_state.words)
-    st.session_state.error_count = 0
     st.experimental_rerun()
 
 # 녹음 섹션
 st.markdown("### Record your pronunciation")
-st.markdown("Click the microphone button and speak the word clearly.")
 
-# 오디오 녹음기 설정
-audio_bytes = audio_recorder(
-    pause_threshold=2.0,
-    sample_rate=44100,
-    channels=1
+audio_processor = AudioProcessor()
+
+def video_frame_callback(frame):
+    """비디오 프레임 콜백 (사용하지 않음)"""
+    return frame
+
+def audio_frame_callback(frame):
+    """오디오 프레임 콜백"""
+    audio_processor.process_audio(frame)
+    return frame
+
+# WebRTC 스트리머 설정
+ctx = webrtc_streamer(
+    key="speech-to-text",
+    mode=WebRtcMode.SENDONLY,
+    audio_receiver_size=1024,
+    video_receiver_size=0,
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
+    video_frame_callback=video_frame_callback,
+    audio_frame_callback=audio_frame_callback,
+    media_stream_constraints={
+        "video": False,
+        "audio": True,
+    },
 )
 
-if audio_bytes:
-    st.audio(audio_bytes, format="audio/wav")
+# 녹음 컨트롤
+if ctx.state.playing:
+    col1, col2 = st.columns(2)
     
-    with st.spinner("Processing your speech..."):
-        transcript = process_audio(audio_bytes)
-        
-        if transcript:
-            st.markdown("### Your pronunciation:")
-            st.write(transcript)
-            
-            if transcript.strip() == st.session_state.current_word:
-                st.success("✨ Correct! Well done!")
-                st.balloons()
-            else:
-                st.error(f"Not quite right. Try again! You said: '{transcript}'")
-                st.session_state.error_count += 1
-        else:
-            st.warning("Could not recognize speech. Please try again.")
-            st.session_state.error_count += 1
+    with col1:
+        if st.button("Start Recording"):
+            audio_processor.start_recording()
+            st.session_state.recording = True
+            st.info("Recording... Speak now!")
 
-# 도움말 표시
+    with col2:
+        if st.button("Stop Recording"):
+            if hasattr(st.session_state, 'recording') and st.session_state.recording:
+                audio_data = audio_processor.stop_recording()
+                st.session_state.recording = False
+
+                if len(audio_data) > 0:
+                    # 임시 WAV 파일 생성
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
+                        import wave
+                        with wave.open(temp_wav.name, 'wb') as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(48000)
+                            wf.writeframes(audio_data.tobytes())
+
+                        # 음성 인식
+                        try:
+                            recognizer = sr.Recognizer()
+                            with sr.AudioFile(temp_wav.name) as source:
+                                audio = recognizer.record(source)
+                                text = recognizer.recognize_google(audio, language='en-US')
+                                
+                                st.markdown("### Your pronunciation:")
+                                st.write(text.lower())
+                                
+                                if text.lower().strip() == st.session_state.current_word:
+                                    st.success("✨ Correct! Well done!")
+                                    st.balloons()
+                                else:
+                                    st.error(f"Not quite right. Try again! You said: '{text.lower()}'")
+                        
+                        except sr.UnknownValueError:
+                            st.warning("Could not understand the audio. Please try again.")
+                        except sr.RequestError as e:
+                            st.error(f"Could not process the audio. Error: {str(e)}")
+                        finally:
+                            os.unlink(temp_wav.name)
+                else:
+                    st.warning("No audio recorded. Please try again.")
+
+# 도움말
 with st.expander("ℹ️ Tips for better recognition"):
     st.markdown("""
     1. **Speak clearly**: Pronounce each word distinctly
     2. **Proper distance**: Keep your microphone about 6-12 inches from your mouth
     3. **Quiet environment**: Minimize background noise
-    4. **Check volume**: Make sure your microphone volume is at an appropriate level
-    5. **Timing**: 
-       - Wait a moment after clicking the record button
-       - Speak when you see the recording indicator
-       - The recording will automatically stop after you finish speaking
+    4. **Browser settings**: 
+       - Allow microphone access when prompted
+       - Use a modern browser (Chrome recommended)
+       - Check your microphone settings
     
     If you're having problems:
-    - Make sure your browser has permission to use the microphone
+    - Refresh the page
+    - Check microphone permissions
     - Try using a different microphone
-    - Refresh the page if the recorder isn't working
-    - Speak at a normal pace and volume
-    """)
-
-# 문제 해결 팁 (에러가 많을 경우)
-if st.session_state.error_count >= 3:
-    st.error("Having trouble with speech recognition? Try these tips:")
-    st.markdown("""
-    1. Speak more slowly and clearly
-    2. Reduce background noise
-    3. Move closer to your microphone
-    4. Check your microphone settings
-    5. Try refreshing the page
+    - Ensure you have a stable internet connection
     """)
