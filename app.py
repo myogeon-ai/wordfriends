@@ -4,13 +4,15 @@ from gtts import gTTS
 import os
 import tempfile
 import speech_recognition as sr
-from audio_recorder_streamlit import audio_recorder
-import numpy as np
-import wave
-import io
 import logging
 import time
-from pydub import AudioSegment
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import queue
+import threading
+import av
+import numpy as np
+import pydub
+import io
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -54,95 +56,28 @@ if 'current_word' not in st.session_state:
 if 'transcript' not in st.session_state:
     st.session_state.transcript = ""
 
-if 'error_count' not in st.session_state:
-    st.session_state.error_count = 0
+if 'audio_buffer' not in st.session_state:
+    st.session_state.audio_buffer = []
 
-# 오디오 처리 함수
-def convert_audio_for_processing(audio_bytes):
-    """오디오 데이터를 speech recognition에 적합한 형식으로 변환"""
-    try:
-        # 오디오 세그먼트로 변환
-        audio_segment = AudioSegment.from_file(
-            io.BytesIO(audio_bytes),
-            format="wav"
-        )
-        
-        # 품질 개선
-        audio_segment = audio_segment.set_channels(1)  # 모노로 변환
-        audio_segment = audio_segment.set_frame_rate(16000)  # 샘플링 레이트 조정
-        
-        # 노이즈 감소를 위한 정규화
-        audio_segment = audio_segment.normalize()
-        
-        # WAV 형식으로 변환
-        buffer = io.BytesIO()
-        audio_segment.export(buffer, format="wav")
-        
-        return buffer.getvalue()
-    except Exception as e:
-        logger.error(f"Audio conversion error: {str(e)}")
-        return None
+# 음성 처리를 위한 클래스
+class AudioProcessor:
+    def __init__(self):
+        self.audio_buffer = []
+        self.recording = False
+        self.audio_queue = queue.Queue()
 
-def process_audio(audio_bytes, max_retries=3):
-    """음성을 텍스트로 변환하는 함수"""
-    if audio_bytes is None:
-        return None
-    
-    # 오디오 데이터 변환
-    processed_audio = convert_audio_for_processing(audio_bytes)
-    if processed_audio is None:
-        return None
-    
-    # 임시 WAV 파일 생성
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
-        temp_wav.write(processed_audio)
-        temp_wav_path = temp_wav.name
-    
-    recognizer = sr.Recognizer()
-    
-    # 노이즈 처리 설정
-    recognizer.dynamic_energy_threshold = True
-    recognizer.energy_threshold = 300
-    recognizer.pause_threshold = 0.8
-    
-    for attempt in range(max_retries):
-        try:
-            with sr.AudioFile(temp_wav_path) as source:
-                # 노이즈 조정
-                recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                # 오디오 데이터 읽기
-                audio_data = recognizer.record(source)
-                
-                # 음성 인식 시도
-                text = recognizer.recognize_google(
-                    audio_data,
-                    language='en-US',
-                    show_all=False
-                )
-                return text.lower()
-                
-        except sr.RequestError as e:
-            logger.error(f"API request error (attempt {attempt + 1}): {str(e)}")
-            time.sleep(1)  # API 요청 간 대기
-            
-        except sr.UnknownValueError:
-            logger.error(f"Speech not recognized (attempt {attempt + 1})")
-            if attempt == max_retries - 1:
-                st.warning("Could not recognize speech. Please speak more clearly and try again.")
-            
-        except Exception as e:
-            logger.error(f"Unexpected error (attempt {attempt + 1}): {str(e)}")
-            if attempt == max_retries - 1:
-                st.error("An error occurred during processing. Please try again.")
-            
-        finally:
-            if attempt == max_retries - 1:
-                try:
-                    os.unlink(temp_wav_path)
-                except Exception as e:
-                    logger.error(f"Error removing temporary file: {str(e)}")
-    
-    return None
+    def process_audio(self, frame):
+        if self.recording:
+            sound = frame.to_ndarray()
+            self.audio_buffer.extend(sound.flatten().tolist())
+
+    def start_recording(self):
+        self.recording = True
+        self.audio_buffer = []
+
+    def stop_recording(self):
+        self.recording = False
+        return np.array(self.audio_buffer, dtype=np.int16)
 
 # TTS 함수
 @st.cache_data
@@ -156,6 +91,32 @@ def get_tts_audio(text):
     except Exception as e:
         logger.error(f"TTS error: {str(e)}")
         return None
+
+# 음성 인식 함수
+def process_audio_data(audio_data, sample_rate=16000):
+    """음성 데이터를 텍스트로 변환"""
+    try:
+        # WAV 파일로 변환
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
+            # WAV 파일 생성
+            with wave.open(temp_wav.name, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio_data.tobytes())
+
+            # 음성 인식
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(temp_wav.name) as source:
+                audio = recognizer.record(source)
+                text = recognizer.recognize_google(audio, language='en-US')
+                return text.lower()
+    except Exception as e:
+        logger.error(f"Error processing audio: {str(e)}")
+        return None
+    finally:
+        if os.path.exists(temp_wav.name):
+            os.unlink(temp_wav.name)
 
 # 메인 앱 UI
 st.title("English Pronunciation Practice")
@@ -181,44 +142,66 @@ if st.button("🔄 New Word"):
 
 # 녹음 섹션
 st.markdown("### Record your pronunciation")
-st.markdown("Click the microphone button and speak the word clearly.")
+st.markdown("Click 'START' to begin recording and 'STOP' when finished.")
 
-audio_bytes = audio_recorder(
-    pause_threshold=2.0,
-    sample_rate=16000,
-    channels=1
+audio_processor = AudioProcessor()
+
+def video_frame_callback(frame):
+    """비디오 프레임 콜백 (오디오만 사용하므로 빈 프레임 반환)"""
+    return frame
+
+def audio_frame_callback(frame):
+    """오디오 프레임 콜백"""
+    audio_processor.process_audio(frame)
+    return frame
+
+# WebRTC 스트리머 설정
+ctx = webrtc_streamer(
+    key="speech-to-text",
+    mode=WebRtcMode.SENDONLY,
+    audio_receiver_size=1024,
+    video_receiver_size=0,
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
+    video_frame_callback=video_frame_callback,
+    audio_frame_callback=audio_frame_callback,
+    media_stream_constraints={
+        "video": False,
+        "audio": True,
+    },
 )
 
-if audio_bytes:
-    with st.spinner("Processing your speech..."):
-        # 녹음된 오디오 재생
-        st.audio(audio_bytes, format="audio/wav")
-        
-        # 음성 처리
-        transcript = process_audio(audio_bytes)
-        
-        if transcript:
-            st.session_state.transcript = transcript
-            st.markdown("### Your pronunciation:")
-            st.write(st.session_state.transcript)
+# 녹음 제어
+if ctx.state.playing:
+    if st.button("Start Recording"):
+        audio_processor.start_recording()
+        st.session_state.recording = True
+        st.info("Recording... Speak now!")
+
+    if st.button("Stop Recording"):
+        if hasattr(st.session_state, 'recording') and st.session_state.recording:
+            audio_data = audio_processor.stop_recording()
+            st.session_state.recording = False
             
-            if st.session_state.transcript.strip() == st.session_state.current_word:
-                st.success("✨ Correct! Well done!")
-                st.balloons()
+            if len(audio_data) > 0:
+                # 음성 처리
+                transcript = process_audio_data(audio_data)
+                
+                if transcript:
+                    st.session_state.transcript = transcript
+                    st.markdown("### Your pronunciation:")
+                    st.write(st.session_state.transcript)
+                    
+                    if st.session_state.transcript.strip() == st.session_state.current_word:
+                        st.success("✨ Correct! Well done!")
+                        st.balloons()
+                    else:
+                        st.error(f"Not quite right. Try again! You said: '{st.session_state.transcript}'")
+                else:
+                    st.warning("Could not recognize speech. Please try again.")
             else:
-                st.error(f"Not quite right. Try again! You said: '{st.session_state.transcript}'")
-        else:
-            st.session_state.error_count += 1
-            if st.session_state.error_count >= 3:
-                st.error("Having trouble with speech recognition. Please try these tips:")
-                st.markdown("""
-                    - Speak clearly and at a normal pace
-                    - Reduce background noise
-                    - Position your microphone closer
-                    - Check your microphone settings
-                    """)
-            else:
-                st.warning("Please try speaking again, more clearly.")
+                st.warning("No audio recorded. Please try again.")
 
 # 도움말
 with st.expander("ℹ️ Tips for better recognition"):
@@ -227,18 +210,14 @@ with st.expander("ℹ️ Tips for better recognition"):
     2. **Proper distance**: Keep your microphone about 6-12 inches from your mouth
     3. **Quiet environment**: Minimize background noise
     4. **Check volume**: Make sure your microphone volume is at an appropriate level
-    5. **Practice timing**: Wait for the recording to start before speaking
+    5. **Browser settings**: 
+       - Allow microphone access when prompted
+       - Use a modern browser (Chrome recommended)
+       - Ensure stable internet connection
     
-    If you're having consistent problems:
-    - Try refreshing the page
-    - Check your browser's microphone permissions
+    If you're having problems:
+    - Refresh the page
+    - Check microphone permissions
     - Try using a different microphone
-    - Ensure you have a stable internet connection
+    - Clear browser cache
     """)
-
-# 디버그 정보 (개발 중에만 표시)
-if st.session_state.get('debug_mode', False):
-    with st.expander("🔧 Debug Information"):
-        st.write("Error count:", st.session_state.error_count)
-        st.write("Current word:", st.session_state.current_word)
-        st.write("Last transcript:", st.session_state.transcript)
