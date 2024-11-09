@@ -1,18 +1,14 @@
-# 크롬을 이용해서 영어 단어를 제시하고 영어로 음성을 녹음하고 
-# 녹음된 내용을 기록해서 출력하려고 하는데 적당한 코드를 작성해줘
-
-
-# streamlit cloud에서 사용하고 싶어
-# Claude 3.5 Sonnet
-# Streamlit을 사용하여 비슷한 기능을 구현한 코드를 만들어드리겠습니다. Streamlit Cloud에서 실행할 수 있는 버전입니다.
 
 import streamlit as st
 import random
-import speech_recognition as sr
 from gtts import gTTS
 import os
-import time
 import tempfile
+import base64
+from audio_recorder_streamlit import audio_recorder
+import speech_recognition as sr
+from io import BytesIO
+import wave
 
 # 페이지 설정
 st.set_page_config(page_title="English Pronunciation Practice", layout="centered")
@@ -79,98 +75,61 @@ if st.button("🔄 New Word"):
     st.session_state.transcript = ""
     st.experimental_rerun()
 
-# 음성 인식 함수
-def speech_to_text():
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.write("🎤 Listening... Speak now!")
+# 음성 인식 처리 함수
+def process_audio(audio_bytes):
+    if audio_bytes is None:
+        return None
+        
+    # WAV 파일 생성
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
+        with wave.open(temp_wav.name, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # mono
+            wav_file.setsampwidth(2)  # 2 bytes per sample
+            wav_file.setframerate(48000)  # sample rate
+            wav_file.writeframes(audio_bytes)
+        
+        # 음성 인식
+        recognizer = sr.Recognizer()
         try:
-            audio = r.listen(source, timeout=5, phrase_time_limit=5)
-            st.write("Processing...")
-            text = r.recognize_google(audio, language='en-US')
-            return text.lower()
-        except sr.WaitTimeoutError:
-            st.error("No speech detected. Please try again.")
+            with sr.AudioFile(temp_wav.name) as source:
+                audio_data = recognizer.record(source)
+                text = recognizer.recognize_google(audio_data, language='en-US')
+                return text.lower()
+        except Exception as e:
+            st.error(f"Error processing audio: {str(e)}")
             return None
-        except sr.UnknownValueError:
-            st.error("Could not understand the audio. Please try again.")
-            return None
-        except sr.RequestError:
-            st.error("Could not request results. Check your internet connection.")
-            return None
+        finally:
+            os.unlink(temp_wav.name)
 
-# 녹음 버튼
-if st.button("🎤 Start Recording"):
-    transcript = speech_to_text()
+# 녹음 섹션
+st.markdown("### Record your pronunciation")
+audio_bytes = audio_recorder()
+
+if audio_bytes:
+    st.audio(audio_bytes, format="audio/wav")
+    transcript = process_audio(audio_bytes)
+    
     if transcript:
         st.session_state.transcript = transcript
+        st.markdown("### Your pronunciation:")
+        st.write(st.session_state.transcript)
         
-# 결과 표시
-if st.session_state.transcript:
-    st.markdown("### Your pronunciation:")
-    st.write(st.session_state.transcript)
-    
-    if st.session_state.transcript.strip() == st.session_state.current_word:
-        st.success("✨ Correct! Well done!")
-    else:
-        st.error("Try again!")
+        if st.session_state.transcript.strip() == st.session_state.current_word:
+            st.success("✨ Correct! Well done!")
+        else:
+            st.error("Try again!")
 
 # 도움말 표시
 with st.expander("ℹ️ How to use"):
     st.markdown("""
     1. Look at the displayed word
     2. Click '🔊 Listen to Pronunciation' to hear the correct pronunciation
-    3. Click '🎤 Start Recording' and speak the word
-    4. See if your pronunciation matches the word
-    5. Click '🔄 New Word' to practice with a different word
+    3. Click the microphone button to start recording
+    4. Speak the word clearly
+    5. Click the microphone button again to stop recording
+    6. See if your pronunciation matches the word
+    7. Click '🔄 New Word' to practice with a different word
     
-    **Note**: Make sure your microphone is connected and working properly.
+    **Note**: Make sure your browser has permission to use the microphone.
     """)
-
-# 필요한 requirements.txt 내용 표시
-st.sidebar.markdown("### Required packages:")
-st.sidebar.code("""
-streamlit
-SpeechRecognition
-gTTS
-PyAudio
-""")
-# 이 코드를 사용하기 위해서는 다음과 같은 설정이 필요합니다:
-
-
-# 먼저 requirements.txt 파일을 생성하고 다음 내용을 추가합니다:
-# requirements.txt
-# streamlit  
-# SpeechRecognition  
-# gTTS  
-# PyAudio  
-# 위의 Python 코드를 app.py로 저장합니다.
-
-
-
-# Streamlit Cloud에 배포하는 방법:
-
-# GitHub에 코드를 푸시합니다
-# https://streamlit.io/cloud 에 접속합니다
-# GitHub 저장소와 연결하여 앱을 배포합니다
-# 이 앱의 주요 기능:
-
-# 영어 단어를 화면에 표시
-# TTS를 통해 정확한 발음을 들을 수 있음
-# 마이크를 통해 사용자의 발음을 녹음
-# 음성을 텍스트로 변환하여 정확도 확인
-# 새로운 단어로 변경 가능
-# 사용상 주의사항:
-
-# 마이크 접근 권한을 허용해야 합니다
-# 인터넷 연결이 필요합니다
-# 음성 인식은 영어(en-US)로 설정되어 있습니다
-# 조용한 환경에서 사용하는 것이 좋습니다
-# 추가 기능:
-
-# 단어 목록은 필요에 따라 수정 가능합니다
-# TTS를 통해 정확한 발음을 들을 수 있습니다
-# 직관적인 UI로 사용이 쉽습니다
-# 결과를 즉시 확인할 수 있습니다
-# 이 앱을 Streamlit Cloud에 배포하면 웹 브라우저를 통해 어디서든 접근하여 영어 발음 연습을 할 수 있습니다.
 

@@ -1,6 +1,7 @@
 streamlit
 SpeechRecognition
 gtts
+gTTS
 googletrans
 sounddevice  
 numpy 
