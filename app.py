@@ -5,6 +5,12 @@
 # pip install difflib   # 설치 안해도 사용가능
 # pip install sounddevice
 # pip install audio-recorder-streamlit
+from io import BytesIO  
+import wave  
+
+# streamlit-webrtc 사용  
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings  
+
 import streamlit as st
 import speech_recognition as sr
 from gtts import gTTS
@@ -53,7 +59,7 @@ def create_audio(text, gender):
 
 # # =================================================================================================
 # # =================================================================================================
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings  
+
 def speech_to_text():  
     """음성을 텍스트로 변환"""  
     r = sr.Recognizer()  
