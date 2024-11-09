@@ -8,3 +8,9 @@ numpy
 audio-recorder-streamlit
 pydub
 av
+
+aioice  
+aiortc  
+
+
+streamlit-mic-recorder

@@ -5,3 +5,6 @@ gTTS
 googletrans
 sounddevice  
 audio-recorder-streamlit
+aioice  
+aiortc  
+streamlit-mic-recorder
