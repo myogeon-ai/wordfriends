@@ -3,7 +3,8 @@
 # pip install gtts
 # pip install googletrans
 # pip install difflib   # 설치 안해도 사용가능
-# pip install sounddevice  
+# pip install sounddevice
+# pip install audio-recorder-streamlit
 import streamlit as st
 import speech_recognition as sr
 from gtts import gTTS
@@ -14,7 +15,8 @@ import difflib
 from googletrans import Translator
 import sounddevice as sd
 import numpy as np
-# from scipy import signal  
+# from scipy import signal
+from audio_recorder_streamlit import audio_recorder  
 
 
 def initialize_session_state():
@@ -49,46 +51,150 @@ def create_audio(text, gender):
     tts.save(filename)
     return filename
 
+# def speech_to_text():
+#     """음성을 텍스트로 변환"""
+#     r = sr.Recognizer()
+#     with sr.Microphone() as source:
+#         st.write("말씀해주세요...")
+#         try:
+#             audio = r.listen(source, timeout=5, phrase_time_limit=5)
+#             text = r.recognize_google(audio, language='en-US')
+#             return text.lower()
+#         except sr.WaitTimeoutError:
+#             st.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")
+#             return None
+#         except sr.UnknownValueError:
+#             st.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")
+#             return None
+#         except sr.RequestError:
+#             st.error("음성 인식 서비스에 접근할 수 없습니다.")
+#             return None
+ 
+    
+# def speech_to_text():  
+#     """음성을 텍스트로 변환"""  
+#     r = sr.Recognizer()  
+    
+#     # 상태 메시지를 표시할 placeholder 생성  
+#     status_placeholder = st.empty()  
+    
+#     # 오디오 녹음 컴포넌트  
+#     status_placeholder.write("🎤 아래 버튼을 클릭하고 말씀해주세요...")  
+#     # audio_bytes = audio_recorder(  
+#     #     text="",  # 버튼 텍스트  
+#     #     recording_color="#e8b62c",  # 녹음 중 색상  
+#     #     neutral_color="#6aa36f",    # 기본 색상  
+#     #     stopping_color="#941100"     # 정지 색상  
+#     # )  
+#     audio_bytes = audio_recorder()  # 파라미터 제거하고 기본값 사용 
+    
+#     # 녹음된 오디오가 있을 경우 처리  
+#     if audio_bytes:  
+#         try:  
+#             # 녹음된 오디오 재생 가능하게 표시  
+#             st.audio(audio_bytes, format="audio/wav")  
+            
+#             status_placeholder.info("음성을 텍스트로 변환 중...")  
+            
+#             # 음성 인식  
+#             audio_data = sr.AudioData(audio_bytes,   
+#                                     sample_rate=44100,  # 샘플링 레이트  
+#                                     sample_width=2)     # 샘플 너비  
+            
+#             # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
+#             text = r.recognize_google(audio_data, language='en-US')  
+            
+#             # 성공적으로 변환된 경우  
+#             status_placeholder.success("음성 인식 완료!")
+#             print(text.lower() )
+#             return text.lower()  
+            
+#         except sr.WaitTimeoutError:  
+#             status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+#             return None  
+#         except sr.UnknownValueError:  
+#             status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+#             return None  
+#         except sr.RequestError:  
+#             status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
+#             return None  
+#         except Exception as e:  
+#             status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+#             return None  
+    
+#     return None      
+        
+def speech_to_text():
 
-def speech_to_text():  
     """음성을 텍스트로 변환"""  
     r = sr.Recognizer()  
-
-    # 오디오 녹음  
-    duration = 5  # 녹음 시간 (초)  
-    fs = 44100  # 샘플링 레이트  
-    recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)  
-    st.write("말씀해주세요...")  
-    sd.wait()  # 녹음 완료까지 기다림  
-
-    # 녹음된 오디오를 텍스트로 변환  
+    
+    # 상태 메시지를 표시할 placeholder 생성  
+    status_placeholder = st.empty()  
+    print('11111111111')
+    # # 마이크 권한 안내 메시지  
+    # st.info("🎧 마이크 사용을 허용해주세요. 처음 실행시 브라우저의 마이크 권한을 허용해야 합니다.")  
+    
+    # 오디오 녹음 컴포넌트  
+    status_placeholder.write("🎧 아래 버튼을 클릭하고 말씀해주세요...")  
+    print('2222222222222')
+    
+    print('3333333')
+    # # audio_recorder 컴포넌트 추가  
+    audio_bytes = audio_recorder(  
+        pause_threshold=2.0,  # 2초 동안 소리가 없으면 자동 정지  
+        sample_rate=44100  
+    )  
+    # # audio_recorder 컴포넌트 추가  
+    # audio_bytes = audio_recorder()
+    
+    print(type(audio_bytes))
+    
+    # 녹음된 오디오가 있을 경우 처리  
+    # if audio_bytes:
+    #     print('aaaaaaaaaaaaaa')
     try:  
-        # 오디오 데이터 준비  
-        audio_data = recording.flatten()  
+        # 잠시 대기하여 브라우저 처리 시간 제공  
+        time.sleep(0.5)
+        print('bbbbbbbb')
         
-        # 음성 인식을 위해 int16 형식으로 변환  
-        audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()  
+        # 녹음된 오디오 재생 가능하게 표시  
+        st.audio(audio_bytes, format="audio/wav")  
+        
+        status_placeholder.info("음성을 텍스트로 변환 중...")  
         
         # 음성 인식  
-        audio_data_for_recognition = sr.AudioData(audio_bytes, fs, 2)  
-        # text = r.recognize_google(audio_data_for_recognition, language='ko-KR')
-        text = r.recognize_google(audio_data_for_recognition, language='en-US')
+        audio_data = sr.AudioData(audio_bytes,   
+                                sample_rate=44100,  
+                                sample_width=2)  
+        
+        # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
+        text = r.recognize_google(audio_data, language='en-US')  
+        print(text)
+        # 성공적으로 변환된 경우  
+        status_placeholder.success("음성 인식 완료!")  
         return text.lower()  
         
     except sr.WaitTimeoutError:  
-        st.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+        status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
         return None  
     except sr.UnknownValueError:  
-        st.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+        status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
         return None  
     except sr.RequestError:  
-        st.error("음성 인식 서비스에 접근할 수 없습니다.")  
+        status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
         return None  
-    
-    
-    
-        
-    
+    except Exception as e:  
+        status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+        return None  
+    # # except Exception as e:  
+    # #     st.error(f"마이크 접근 오류: {str(e)}")  
+    # #     st.info("브라우저의 마이크 권한을 확인해주세요.")  
+    # #     return None  
+    # print('llllllllllllllllll')
+    # return None      
+ 
+
 
 def calculate_similarity(word1, word2):
     """두 단어의 유사도 계산"""
@@ -119,6 +225,19 @@ def main():
     # 세션 상태 초기화
     initialize_session_state()
     
+        
+    # # 첫 실행시 안내 메시지 표시  
+    # if st.session_state.is_first_run:  
+    #     st.info("👋 처음 사용하시나요? 브라우저의 마이크 권한을 허용해주세요!")  
+    #     st.session_state.is_first_run = False  
+    # 초기 안내 메시지  
+    # st.markdown("""  
+    # ### 사용 방법  
+    # 1. 브라우저의 마이크 권한을 허용해주세요  
+    # 2. 아래 녹음 버튼을 클릭하고 말씀해주세요  
+    # 3. 다시 버튼을 클릭하면 녹음이 종료됩니다  
+    # """)  
+        
     
     # 이미지 경로 설정  
     topic_image_paths = {  
