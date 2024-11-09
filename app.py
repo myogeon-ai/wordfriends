@@ -175,18 +175,18 @@ def speech_to_text():
         status_placeholder.success("음성 인식 완료!")  
         return text.lower()  
         
-    except sr.WaitTimeoutError:  
-        status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
-        return None  
-    except sr.UnknownValueError:  
-        status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
-        return None  
-    except sr.RequestError:  
-        status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
-        return None  
-    except Exception as e:  
-        status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
-        return None  
+    # except sr.WaitTimeoutError:  
+    #     status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+    #     return None  
+    # except sr.UnknownValueError:  
+    #     status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+    #     return None  
+    # except sr.RequestError:  
+    #     status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
+    #     return None  
+    # except Exception as e:  
+    #     status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+    #     return None  
     # # except Exception as e:  
     # #     st.error(f"마이크 접근 오류: {str(e)}")  
     # #     st.info("브라우저의 마이크 권한을 확인해주세요.")  
