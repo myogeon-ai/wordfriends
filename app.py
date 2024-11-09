@@ -123,50 +123,13 @@ def create_audio(text, gender):
 
 # # =================================================================================================
 # # =================================================================================================
-# 
-# import streamlit as st  
-# from streamlit_mic_recorder import mic_recorder  
-# import speech_recognition as sr  
-# from io import BytesIO  
-
-# def speech_to_text():  
-#     """음성을 텍스트로 변환"""  
-#     r = sr.Recognizer()  
-#     status_placeholder = st.empty()  
-    
-#     # 마이크 녹음  
-#     audio = mic_recorder(  
-#         key="recorder",  
-#         start_prompt="녹음 시작",  
-#         stop_prompt="녹음 중지",  
-#         just_once=True  
-#     )  
-    
-#     if audio:  
-#         try:  
-#             # 음성 인식  
-#             audio_data = sr.AudioData(audio,   
-#                                     sample_rate=44100,  
-#                                     sample_width=2)  
-#             text = r.recognize_google(audio_data, language='en-US')  
-            
-#             status_placeholder.success("음성 인식 완료!")  
-#             return text.lower()  
-            
-#         except Exception as e:  
-#             status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
-#             return None  
-    
-#     return None
-# # =================================================================================================
-# # =================================================================================================
 
 def speech_to_text():  
     """음성을 텍스트로 변환"""  
     r = sr.Recognizer()  
     status_placeholder = st.empty()  
     
-    status_placeholder.write("🎤 마이크 버튼을 클릭하고 말씀해주세요...")  
+    status_placeholder.write("?? 마이크 버튼을 클릭하고 말씀해주세요...")  
     
     # 마이크 녹음  
     audio = mic_recorder(  
@@ -199,7 +162,6 @@ def speech_to_text():
             return None  
     
     return None  
-
 
 # # =================================================================================================
 # # =================================================================================================
