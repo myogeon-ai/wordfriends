@@ -1,179 +1,301 @@
-# 해당 코드는 streamlit cloud에서 self.get_pyaudio() 와 같은 오류가 발생한다 대안은?
-
-
-# Claude 3.5 Sonnet
-# PyAudio가 Streamlit Cloud에서 문제가 되는 것을 해결하기 위해, 
-# 웹 브라우저의 기본 녹음 기능을 사용하는 방식으로 수정하겠습니다. 
-# 아래 코드는 JavaScript의 MediaRecorder API를 활용하여 구현한 버전입니다.
-
-# Streamlit Web Speech App
+# pip install streamlit
+# pip install SpeechRecognition
+# pip install gtts
+# pip install googletrans
+# pip install difflib   # 설치 안해도 사용가능
+# pip install sounddevice  
 import streamlit as st
-import random
+import speech_recognition as sr
 from gtts import gTTS
 import os
-import tempfile
-import base64
-from audio_recorder_streamlit import audio_recorder
-import speech_recognition as sr
-from io import BytesIO
-import wave
+import random
+import time
+import difflib
+from googletrans import Translator
+import sounddevice as sd
+import numpy as np
+# from scipy import signal  
 
-# 페이지 설정
-st.set_page_config(page_title="English Pronunciation Practice", layout="centered")
 
-# CSS 스타일 적용
-st.markdown("""
-    <style>
-    .main {
-        padding: 2rem;
-    }
-    .stButton>button {
-        width: 100%;
-        margin-top: 1rem;
-    }
-    .word-display {
-        font-size: 3rem;
-        font-weight: bold;
-        text-align: center;
-        padding: 2rem;
-        margin: 1rem 0;
-        background-color: #f0f2f6;
-        border-radius: 10px;
-    }
-    </style>
+def initialize_session_state():
+    """세션 상태 초기화"""
+    if 'current_word' not in st.session_state:
+        st.session_state.current_word = ''
+    if 'score' not in st.session_state:
+        st.session_state.score = 0
+    if 'total_attempts' not in st.session_state:
+        st.session_state.total_attempts = 0
+    if 'selected_gender' not in st.session_state:
+        st.session_state.selected_gender = 'Boy'
+
+def get_random_word():
+    """무작위 단어 선택"""
+    words = [
+        "apple", "banana", "orange", "grape", "strawberry",
+        "computer", "python", "programming", "artificial", "intelligence",
+        "beautiful", "wonderful", "amazing", "fantastic", "excellent"
+    ]
+    return random.choice(words)
+
+def create_audio(text, gender):
+    """텍스트를 음성으로 변환 (성별에 따른 설정 적용)"""
+    # 성별에 따른 언어 설정
+    if gender == 'Boy':
+        tts = gTTS(text=text, lang='en', tld='co.uk')  # 영국 영어 (남성스러운 음색)
+    else:
+        tts = gTTS(text=text, lang='en', tld='com')    # 미국 영어 (여성스러운 음색)
+    
+    filename = "word.mp3"
+    tts.save(filename)
+    return filename
+
+
+def speech_to_text():  
+    """음성을 텍스트로 변환"""  
+    r = sr.Recognizer()  
+
+    # 오디오 녹음  
+    duration = 5  # 녹음 시간 (초)  
+    fs = 44100  # 샘플링 레이트  
+    recording = sd.rec(int(duration * fs), samplerate=fs, channels=1)  
+    st.write("말씀해주세요...")  
+    sd.wait()  # 녹음 완료까지 기다림  
+
+    # 녹음된 오디오를 텍스트로 변환  
+    try:  
+        # 오디오 데이터 준비  
+        audio_data = recording.flatten()  
+        
+        # 음성 인식을 위해 int16 형식으로 변환  
+        audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()  
+        
+        # 음성 인식  
+        audio_data_for_recognition = sr.AudioData(audio_bytes, fs, 2)  
+        # text = r.recognize_google(audio_data_for_recognition, language='ko-KR')
+        text = r.recognize_google(audio_data_for_recognition, language='en-US')
+        return text.lower()  
+        
+    except sr.WaitTimeoutError:  
+        st.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+        return None  
+    except sr.UnknownValueError:  
+        st.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+        return None  
+    except sr.RequestError:  
+        st.error("음성 인식 서비스에 접근할 수 없습니다.")  
+        return None  
+    
+    
+    
+        
+    
+
+def calculate_similarity(word1, word2):
+    """두 단어의 유사도 계산"""
+    return difflib.SequenceMatcher(None, word1, word2).ratio()
+
+def get_character_emoji(gender):
+    """성별에 따른 이모지 반환"""
+    return "👦" if gender == 'Boy' else "👧"
+
+def main():
+    # st.title("Word Friends")
+    # st.title("AI 친구와 단어를 학습해보세요")
+    # st.title("주제를 선택하세요")
+
+    st.write("""  
+        <div style='text-align: center;'>  
+            <h1>Word Friends</h1>
+            <h5>AI 친구와 단어를 학습해보세요</h5>
+            </br>
+            </br>
+            </br>
+            <h4>주제를 선택하세요</h4>
+        </div>  
+        """, unsafe_allow_html=True)
+    
+            
+        
+    # 세션 상태 초기화
+    initialize_session_state()
+    
+    
+    # 이미지 경로 설정  
+    topic_image_paths = {  
+        'School': './image/School.png',   # 주제 학교 이미지 경로
+        'Family': './image/Family.png',   # 주제 가족 이미지 경로
+        'Animals': './image/Animals.png',   # 주제 동물 이미지 경로
+        'Weather': './image/Weather.png',   # 주제 날씨 이미지 경로
+        'Food': './image/Food.png'   # 주제 음식 이미지 경로
+    }  
+
+    
+    
+    # 선택된 이미지를 저장할 변수 초기화  
+    if 'selected_image' not in st.session_state:  
+        st.session_state.selected_image = None  
+
+    # 이미지 클릭 이벤트 처리  
+    def select_image(image_key):  
+        st.session_state.selected_image = image_key  
+
+    col1, col2, col3, col4, col5 = st.columns(5)  
+
+    with col1:  
+        if st.button("School"):  
+            select_image('School')  
+        st.image(topic_image_paths['School'], caption='School', use_column_width=True)  
+
+    with col2:  
+        if st.button("Family"):  
+            select_image('Family')  
+        st.image(topic_image_paths['Family'], caption='Family', use_column_width=True)
+        
+    with col3:  
+        if st.button("Animals"):  
+            select_image('Animals')  
+        st.image(topic_image_paths['Animals'], caption='Animals', use_column_width=True)  
+
+    with col4:  
+        if st.button("Weather"):  
+            select_image('Weather')  
+        st.image(topic_image_paths['Weather'], caption='Weather', use_column_width=True)
+        
+    with col5:  
+        if st.button("Food"):  
+            select_image('Food')  
+        st.image(topic_image_paths['Food'], caption='Food', use_column_width=True)  
+
+    # 선택된 이미지 표시  
+    if st.session_state.selected_image:  
+        st.write(f"Hello {st.session_state.selected_image}")
+        
+
+
+
+    # 캐릭터 선택
+    st.write("""  
+    <div style='text-align: center;'>  
+        <h4>AI 친구를 선택하세요</h4>
+    </div>  
     """, unsafe_allow_html=True)
 
-# 세션 상태 초기화
-if 'words' not in st.session_state:
-    st.session_state.words = [
-        'apple', 'banana', 'chocolate', 'diamond', 'elephant',
-        'flower', 'guitar', 'hamburger', 'island', 'jungle',
-        'kitchen', 'lemon', 'monkey', 'notebook', 'orange'
-    ]
+    # 이미지 경로 설정  
+    image_paths = {  
+        'Boy': './image/boy.png',   # 남자아이 이미지 경로  
+        'Girl': './image/girl.png'   # 여자아이 이미지 경로  
+    }  
 
-if 'current_word' not in st.session_state:
-    st.session_state.current_word = random.choice(st.session_state.words)
-
-if 'transcript' not in st.session_state:
-    st.session_state.transcript = ""
-
-# 제목
-st.title("English Pronunciation Practice")
-st.markdown("---")
-
-# 현재 단어 표시
-st.markdown(f'<div class="word-display">{st.session_state.current_word}</div>', unsafe_allow_html=True)
-
-# TTS 함수
-def text_to_speech(text):
-    tts = gTTS(text=text, lang='en')
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as fp:
-        tts.save(fp.name)
-        return fp.name
-
-# 발음 듣기 버튼
-if st.button("🔊 Listen to Pronunciation"):
-    audio_file = text_to_speech(st.session_state.current_word)
-    st.audio(audio_file)
-    os.unlink(audio_file)  # 임시 파일 삭제
-
-# 새로운 단어 선택
-if st.button("🔄 New Word"):
-    st.session_state.current_word = random.choice(st.session_state.words)
-    st.session_state.transcript = ""
-    st.experimental_rerun()
-
-# 음성 인식 처리 함수
-def process_audio(audio_bytes):
-    if audio_bytes is None:
-        return None
-        
-    # WAV 파일 생성
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_wav:
-        with wave.open(temp_wav.name, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # mono
-            wav_file.setsampwidth(2)  # 2 bytes per sample
-            wav_file.setframerate(48000)  # sample rate
-            wav_file.writeframes(audio_bytes)
-        
-        # 음성 인식
-        recognizer = sr.Recognizer()
-        try:
-            with sr.AudioFile(temp_wav.name) as source:
-                audio_data = recognizer.record(source)
-                text = recognizer.recognize_google(audio_data, language='en-US')
-                return text.lower()
-        except Exception as e:
-            st.error(f"Error processing audio: {str(e)}")
-            return None
-        finally:
-            os.unlink(temp_wav.name)
-
-# 녹음 섹션
-st.markdown("### Record your pronunciation")
-audio_bytes = audio_recorder()
-
-if audio_bytes:
-    st.audio(audio_bytes, format="audio/wav")
-    transcript = process_audio(audio_bytes)
     
-    if transcript:
-        st.session_state.transcript = transcript
-        st.markdown("### Your pronunciation:")
-        st.write(st.session_state.transcript)
-        
-        if st.session_state.transcript.strip() == st.session_state.current_word:
-            st.success("✨ Correct! Well done!")
-        else:
-            st.error("Try again!")
-
-# 도움말 표시
-with st.expander("ℹ️ How to use"):
-    st.markdown("""
-    1. Look at the displayed word
-    2. Click '🔊 Listen to Pronunciation' to hear the correct pronunciation
-    3. Click the microphone button to start recording
-    4. Speak the word clearly
-    5. Click the microphone button again to stop recording
-    6. See if your pronunciation matches the word
-    7. Click '🔄 New Word' to practice with a different word
     
-    **Note**: Make sure your browser has permission to use the microphone.
-    """)
+    # 선택된 이미지를 저장할 변수 초기화  
+    if 'selected_image' not in st.session_state:  
+        st.session_state.selected_image = None  
+
+    # 이미지 클릭 이벤트 처리  
+    def select_image(image_key):  
+        st.session_state.selected_image = image_key  
+
+    col1, col2 = st.columns(2)  
+
+    with col1:  
+        if st.button("Boy"):  
+            select_image('Boy')  
+        st.image(image_paths['Boy'], caption='Boy', use_column_width=True)  
+
+    with col2:  
+        if st.button("Girl"):  
+            select_image('Girl')  
+        st.image(image_paths['Girl'], caption='Girl', use_column_width=True)  
+
+    # 선택된 이미지 표시  
+    if st.session_state.selected_image:  
+        st.write(f"Hello {st.session_state.selected_image}")
+
+        
+                
+        
+    
+    # 구분선 추가
+    st.markdown("---")
+    
+    
+    st.write("""  
+    <div style='text-align: center;'>  
+        <h6>듣고 따라 읽기</h6>
+        <h2 style='text-align: center; color: rgb(205, 118, 242);'>Listen and Repeat</h2>
+        </br>
+        <h6>Play 버튼을 눌러 단어를 듣고</h6>
+        <h6>Mic 버튼을 눌러 음성을 녹음하세요</h6>
+    </div>  
+    """, unsafe_allow_html=True)
 
 
-# 그리고 requirements.txt 파일도 다음과 같이 수정해야 합니다:
-
-# requirements.txt
-# streamlit
-# gTTS
-# SpeechRecognition
-# audio-recorder-streamlit
 
 
-# 주요 변경사항:
 
-# PyAudio 대신 audio-recorder-streamlit 라이브러리를 사용합니다.
-# 브라우저의 네이티브 오디오 녹음 기능을 활용합니다.
-# 녹음된 오디오를 WAV 형식으로 변환하여 처리합니다.
-# 사용 방법:
+    # 사이드바에 점수 표시
+    st.sidebar.header("점수")
+    st.sidebar.write(f"정확도: {st.session_state.score}/{st.session_state.total_attempts if st.session_state.total_attempts > 0 else 1:.2%}")
+    
+    test = [1, 2, 3, 4, 5]
+    for i in test:
+        col1, col2 = st.columns([1, 1])
+        # 새 단어 받기 버튼
+        with col1: 
+            st.image(image_paths['Boy'], width=200, caption='Boy')
+        with col2: 
+            if st.button("PLAY", key="play_button_" + str(i)):
+                st.session_state.current_word = get_random_word()
+                audio_file = create_audio(st.session_state.current_word, st.session_state.selected_gender)
+                
+                # 단어와 발음 듣기 버튼 표시
+                st.write(f"## 이 단어를 읽어보세요: **{st.session_state.current_word}**")
+                st.audio(audio_file)
+                
+                # 한국어 의미 표시
+                translator = Translator()
+                try:
+                    korean_meaning = translator.translate(st.session_state.current_word, dest='ko').text
+                    st.write(f"단어 뜻: {korean_meaning}")
+                except:
+                    st.write("단어 뜻을 가져올 수 없습니다.")
+                
+                # 임시 파일 삭제
+                os.remove(audio_file)
+            
+            # 발음 체크 버튼
+            if st.button("MIC", key="mic_button_" + str(i)):
+                if st.session_state.current_word:
+                    spoken_text = speech_to_text()
+                    if spoken_text:
+                        similarity = calculate_similarity(st.session_state.current_word, spoken_text)
+                        st.session_state.total_attempts += 1
+                        
+                        if similarity > 0.8:
+                            st.success(f"정확합니다! (유사도: {similarity:.2%})")
+                            st.session_state.score += 1
+                            st.balloons()  # 성공시 풍선 효과 추가
+                        else:
+                            st.error(f"다시 시도해보세요. 인식된 단어: {spoken_text} (유사도: {similarity:.2%})")
+                        
+                        # 결과 표시
+                        st.write(f"당신이 말한 단어: {spoken_text}")
+                        st.write(f"목표 단어: {st.session_state.current_word}")
+                else:
+                    st.warning("먼저 '새 단어 받기' 버튼을 클릭하세요.")
+            st.write("")  
 
-# 위 코드를 app.py로 저장합니다.
-# requirements.txt 파일을 생성하고 필요한 패키지를 추가합니다.
-# GitHub에 코드를 푸시합니다.
-# Streamlit Cloud에서 배포합니다.
-# 이 버전의 장점:
 
-# Streamlit Cloud에서 안정적으로 작동합니다.
-# PyAudio 종속성 문제가 해결되었습니다.
-# 브라우저 네이티브 녹음 기능을 사용하여 더 나은 호환성을 제공합니다.
-# 사용자 인터페이스가 더 직관적입니다.
-# 주의사항:
+    # 도움말
+    with st.expander("사용 방법"):
+        st.write("""
+        1. 상단에서 캐릭터(Boy/Girl)를 선택하세요.
+        2. '새 단어 받기' 버튼을 클릭하여 새로운 단어를 받습니다.
+        3. 단어의 발음을 들어보려면 재생 버튼을 클릭하세요.
+        4. '발음 체크하기' 버튼을 클릭하고 단어를 말해보세요.
+        5. 결과를 확인하고 점수를 높여보세요!
+        """)
 
-# 브라우저의 마이크 접근 권한을 허용해야 합니다.
-# 처음 녹음 시 권한 요청이 표시될 수 있습니다.
-# 인터넷 연결이 필요합니다.
-# 녹음 품질은 사용자의 마이크 품질에 따라 달라질 수 있습니다.
-# 이제 이 앱은 Streamlit Cloud에서 문제없이 실행될 것입니다. 
-# 사용자는 마이크 버튼을 클릭하여 녹음을 시작하고, 다시 클릭하여 녹음을 중지할 수 있습니다. 
-# 녹음된 음성은 자동으로 텍스트로 변환되어 정확도를 확인할 수 있습니다.
+if __name__ == "__main__":
+    main()
