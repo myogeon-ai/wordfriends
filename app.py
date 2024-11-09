@@ -11,6 +11,9 @@ import wave
 # streamlit-webrtc 사용  
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings  
 
+from streamlit_mic_recorder import mic_recorder  
+import speech_recognition as sr  
+
 import streamlit as st
 import speech_recognition as sr
 from gtts import gTTS
@@ -60,62 +63,62 @@ def create_audio(text, gender):
 # # =================================================================================================
 # # =================================================================================================
 
-def speech_to_text():  
-    """음성을 텍스트로 변환"""  
-    r = sr.Recognizer()  
-    status_placeholder = st.empty()  
+# def speech_to_text():  
+#     """음성을 텍스트로 변환"""  
+#     r = sr.Recognizer()  
+#     status_placeholder = st.empty()  
     
-    # 오디오 처리를 위한 콜백 함수  
-    def audio_frames_callback(frames):  
-        sound = np.frombuffer(frames, dtype=np.int16)  
-        return sound  
+#     # 오디오 처리를 위한 콜백 함수  
+#     def audio_frames_callback(frames):  
+#         sound = np.frombuffer(frames, dtype=np.int16)  
+#         return sound  
     
-    # webrtc_streamer 설정  
-    webrtc_ctx = webrtc_streamer(  
-        key="speech-to-text",  
-        rtc_configuration=RTCConfiguration(  
-            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}  
-        ),  
-        media_stream_constraints={  
-            "video": False,  
-            "audio": True,  
-        },  
-        audio_receiver_size=1024,  
-        async_processing=True,  
-    )  
+#     # webrtc_streamer 설정  
+#     webrtc_ctx = webrtc_streamer(  
+#         key="speech-to-text",  
+#         rtc_configuration=RTCConfiguration(  
+#             {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}  
+#         ),  
+#         media_stream_constraints={  
+#             "video": False,  
+#             "audio": True,  
+#         },  
+#         audio_receiver_size=1024,  
+#         async_processing=True,  
+#     )  
 
-    if webrtc_ctx.audio_receiver:  
-        if webrtc_ctx.state.playing:  
-            status_placeholder.write("🎤 녹음 중...")  
-            try:  
-                # 오디오 데이터 수집  
-                audio_frames = webrtc_ctx.audio_receiver.get_frames()  
-                if audio_frames:  
-                    # 오디오 데이터를 WAV 형식으로 변환  
-                    audio_data = b''.join([frame.to_ndarray().tobytes() for frame in audio_frames])  
+#     if webrtc_ctx.audio_receiver:  
+#         if webrtc_ctx.state.playing:  
+#             status_placeholder.write("🎤 녹음 중...")  
+#             try:  
+#                 # 오디오 데이터 수집  
+#                 audio_frames = webrtc_ctx.audio_receiver.get_frames()  
+#                 if audio_frames:  
+#                     # 오디오 데이터를 WAV 형식으로 변환  
+#                     audio_data = b''.join([frame.to_ndarray().tobytes() for frame in audio_frames])  
                     
-                    # WAV 파일 생성  
-                    wav_bytes = BytesIO()  
-                    with wave.open(wav_bytes, 'wb') as wav_file:  
-                        wav_file.setnchannels(1)  
-                        wav_file.setsampwidth(2)  
-                        wav_file.setframerate(16000)  
-                        wav_file.writeframes(audio_data)  
+#                     # WAV 파일 생성  
+#                     wav_bytes = BytesIO()  
+#                     with wave.open(wav_bytes, 'wb') as wav_file:  
+#                         wav_file.setnchannels(1)  
+#                         wav_file.setsampwidth(2)  
+#                         wav_file.setframerate(16000)  
+#                         wav_file.writeframes(audio_data)  
                     
-                    # 음성 인식  
-                    audio = sr.AudioData(wav_bytes.getvalue(),   
-                                       sample_rate=16000,  
-                                       sample_width=2)  
-                    text = r.recognize_google(audio, language='en-US')  
+#                     # 음성 인식  
+#                     audio = sr.AudioData(wav_bytes.getvalue(),   
+#                                        sample_rate=16000,  
+#                                        sample_width=2)  
+#                     text = r.recognize_google(audio, language='en-US')  
                     
-                    status_placeholder.success("음성 인식 완료!")  
-                    return text.lower()  
+#                     status_placeholder.success("음성 인식 완료!")  
+#                     return text.lower()  
                     
-            except Exception as e:  
-                status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
-                return None  
+#             except Exception as e:  
+#                 status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+#                 return None  
     
-    return None  
+#     return None  
 
 
 # # =================================================================================================
@@ -157,7 +160,50 @@ def speech_to_text():
 #     return None
 # # =================================================================================================
 # # =================================================================================================
-# 
+
+def speech_to_text():  
+    """음성을 텍스트로 변환"""  
+    r = sr.Recognizer()  
+    status_placeholder = st.empty()  
+    
+    status_placeholder.write("🎤 마이크 버튼을 클릭하고 말씀해주세요...")  
+    
+    # 마이크 녹음  
+    audio = mic_recorder(  
+        start_prompt="녹음 시작",  
+        stop_prompt="녹음 종료",  
+        key='recorder'  
+    )  
+    
+    if audio:  
+        try:  
+            status_placeholder.info("음성을 텍스트로 변환 중...")  
+            
+            # 음성 인식  
+            audio_data = sr.AudioData(audio,   
+                                    sample_rate=44100,  
+                                    sample_width=2)  
+            text = r.recognize_google(audio_data, language='en-US')  
+            
+            status_placeholder.success("음성 인식 완료!")  
+            return text.lower()  
+            
+        except sr.UnknownValueError:  
+            status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+            return None  
+        except sr.RequestError:  
+            status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
+            return None  
+        except Exception as e:  
+            status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+            return None  
+    
+    return None  
+
+
+# # =================================================================================================
+# # =================================================================================================
+
 
 def calculate_similarity(word1, word2):
     """두 단어의 유사도 계산"""
