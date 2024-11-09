@@ -124,76 +124,173 @@ def create_audio(text, gender):
     
 #     return None      
         
-def speech_to_text():
+# def speech_to_text():
 
+#     """음성을 텍스트로 변환"""  
+#     r = sr.Recognizer()  
+    
+#     # 상태 메시지를 표시할 placeholder 생성  
+#     status_placeholder = st.empty()  
+
+    
+#     # # 마이크 권한 안내 메시지  
+#     # st.info("🎧 마이크 사용을 허용해주세요. 처음 실행시 브라우저의 마이크 권한을 허용해야 합니다.")  
+    
+#     # 오디오 녹음 컴포넌트  
+#     status_placeholder.write("🎧 아래 버튼을 클릭하고 말씀해주세요...")  
+
+    
+#     # # audio_recorder 컴포넌트 추가  
+#     audio_bytes = audio_recorder(  
+#         pause_threshold=2.0,  # 2초 동안 소리가 없으면 자동 정지  
+#         sample_rate=44100  
+#     )  
+#     # # audio_recorder 컴포넌트 추가  
+#     # audio_bytes = audio_recorder()
+
+    
+#     # 녹음된 오디오가 있을 경우 처리  
+#     if audio_bytes:
+    
+#         try:  
+#             # 잠시 대기하여 브라우저 처리 시간 제공  
+#             time.sleep(0.5)
+
+            
+#             # 녹음된 오디오 재생 가능하게 표시  
+#             st.audio(audio_bytes, format="audio/wav")  
+            
+#             status_placeholder.info("음성을 텍스트로 변환 중...")  
+            
+#             # 음성 인식  
+#             audio_data = sr.AudioData(audio_bytes,   
+#                                     sample_rate=44100,  
+#                                     sample_width=2)  
+            
+#             # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
+#             text = r.recognize_google(audio_data, language='en-US')  
+
+#             # 성공적으로 변환된 경우  
+#             status_placeholder.success("음성 인식 완료!")  
+#             return text.lower()  
+            
+#         except sr.WaitTimeoutError:  
+#             status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
+#             return None  
+#         except sr.UnknownValueError:  
+#             status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
+#             return None  
+#         except sr.RequestError:  
+#             status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
+#             return None  
+#         except Exception as e:  
+#             status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+#             return None  
+#         except Exception as e:  
+#             st.error(f"마이크 접근 오류: {str(e)}")  
+#             st.info("브라우저의 마이크 권한을 확인해주세요.")  
+#             return None  
+
+#     return None      
+ 
+# =================================================================================================
+# =================================================================================================
+# Streamlit Cloud에서 녹음 기능이 작동하지 않는 주요 원인과 해결 방법을 설명해드리겠습니다:
+
+# 주요 문제점:
+# Streamlit Cloud는 서버 환경에서 실행되므로 직접적인 마이크 접근이 불가능합니다.
+# sounddevice와 같은 로컬 오디오 장치에 의존하는 라이브러리는 Cloud 환경에서 작동하지 않습니다.
+# audio_recorder_streamlit은 브라우저 기반 녹음을 지원하지만, 서버 환경에서 필요한 의존성 문제가 있을 수 있습니다.
+# 해결 방안:
+# 아래와 같이 코드를 수정해보세요:
+# python
+
+# import streamlit as st  
+# import speech_recognition as sr  
+# from gtts import gTTS  
+# import os  
+# import random  
+# import time  
+# import difflib  
+# from googletrans import Translator  
+from io import BytesIO  
+import wave  
+
+# streamlit-webrtc 사용  
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings  
+
+def speech_to_text():  
     """음성을 텍스트로 변환"""  
     r = sr.Recognizer()  
-    
-    # 상태 메시지를 표시할 placeholder 생성  
     status_placeholder = st.empty()  
-
     
-    # # 마이크 권한 안내 메시지  
-    # st.info("🎧 마이크 사용을 허용해주세요. 처음 실행시 브라우저의 마이크 권한을 허용해야 합니다.")  
-    
-    # 오디오 녹음 컴포넌트  
-    status_placeholder.write("🎧 아래 버튼을 클릭하고 말씀해주세요...")  
-
-    
-    # # audio_recorder 컴포넌트 추가  
-    audio_bytes = audio_recorder(  
-        pause_threshold=2.0,  # 2초 동안 소리가 없으면 자동 정지  
-        sample_rate=44100  
+    # webrtc_streamer를 사용한 오디오 캡처  
+    webrtc_ctx = webrtc_streamer(  
+        key="speech-to-text",  
+        mode=WebRtcMode.AUDIO_RECORDER,  
+        client_settings=ClientSettings(  
+            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},  
+            media_stream_constraints={"audio": True},  
+        ),  
     )  
-    # # audio_recorder 컴포넌트 추가  
-    # audio_bytes = audio_recorder()
-    
-    print(type(audio_bytes))
-    
-    # 녹음된 오디오가 있을 경우 처리  
-    # if audio_bytes:
-    
-    # try:  
-    # 잠시 대기하여 브라우저 처리 시간 제공  
-    time.sleep(0.5)
 
+    if webrtc_ctx.audio_receiver:  
+        if webrtc_ctx.state.playing:  
+            status_placeholder.write("🎤 녹음 중...")  
+        elif webrtc_ctx.audio_receiver.audio_data is not None:  
+            # 녹음된 오디오 데이터 처리  
+            try:  
+                audio_data = webrtc_ctx.audio_receiver.audio_data  
+                
+                # 오디오 데이터를 WAV 형식으로 변환  
+                wav_bytes = BytesIO()  
+                with wave.open(wav_bytes, 'wb') as wav_file:  
+                    wav_file.setnchannels(1)  
+                    wav_file.setsampwidth(2)  
+                    wav_file.setframerate(16000)  
+                    wav_file.writeframes(audio_data.tobytes())  
+                
+                # 음성 인식  
+                audio = sr.AudioData(wav_bytes.getvalue(),   
+                                   sample_rate=16000,  
+                                   sample_width=2)  
+                text = r.recognize_google(audio, language='en-US')  
+                
+                status_placeholder.success("음성 인식 완료!")  
+                return text.lower()  
+                
+            except Exception as e:  
+                status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
+                return None  
     
-    # 녹음된 오디오 재생 가능하게 표시  
-    st.audio(audio_bytes, format="audio/wav")  
-    
-    status_placeholder.info("음성을 텍스트로 변환 중...")  
-    
-    # 음성 인식  
-    audio_data = sr.AudioData(audio_bytes,   
-                            sample_rate=44100,  
-                            sample_width=2)  
-    
-    # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
-    text = r.recognize_google(audio_data, language='en-US')  
+    return None  
 
-    # 성공적으로 변환된 경우  
-    status_placeholder.success("음성 인식 완료!")  
-    return text.lower()  
-        
-    # except sr.WaitTimeoutError:  
-    #     status_placeholder.error("음성이 감지되지 않았습니다. 다시 시도해주세요.")  
-    #     return None  
-    # except sr.UnknownValueError:  
-    #     status_placeholder.error("음성을 인식할 수 없습니다. 다시 시도해주세요.")  
-    #     return None  
-    # except sr.RequestError:  
-    #     status_placeholder.error("음성 인식 서비스에 접근할 수 없습니다.")  
-    #     return None  
-    # except Exception as e:  
-    #     status_placeholder.error(f"오류가 발생했습니다: {str(e)}")  
-    #     return None  
-    # # except Exception as e:  
-    # #     st.error(f"마이크 접근 오류: {str(e)}")  
-    # #     st.info("브라우저의 마이크 권한을 확인해주세요.")  
-    # #     return None  
+# requirements.txt에 추가해야 할 패키지:  
+# streamlit-webrtc  
+# aioice  
+# aiortc  
+# av
 
-    # return None      
- 
+# 주요 변경사항:
+# audio_recorder_streamlit 대신 streamlit-webrtc 사용
+# WebRTC를 통한 브라우저 기반 오디오 캡처 구현
+# 서버 환경에서도 작동 가능한 구조로 변경
+# 설치 필요 패키지:
+# streamlit-webrtc  
+# aioice  
+# aiortc  
+# av  
+# 추가 설정:
+# requirements.txt 파일에 위의 패키지들을 추가
+# Streamlit Cloud의 설정에서 Python 3.7 이상 버전 사용 확인
+# 주의사항:
+# HTTPS 환경에서만 마이크 접근이 가능합니다 (Streamlit Cloud는 기본적으로 HTTPS 제공)
+# 브라우저의 마이크 권한 허용이 필요합니다
+# 첫 실행 시 약간의 지연이 있을 수 있습니다
+# 이러한 변경사항을 적용하면 Streamlit Cloud 환경에서도 녹음 기능이 정상적으로 작동할 것입니다. 또한 WebRTC를 사용함으로써 더 안정적인 오디오 스트리밍이 가능해집니다.
+# =================================================================================================
+# =================================================================================================
+
 
 
 def calculate_similarity(word1, word2):
