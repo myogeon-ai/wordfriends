@@ -131,15 +131,15 @@ def speech_to_text():
     
     # 상태 메시지를 표시할 placeholder 생성  
     status_placeholder = st.empty()  
-    print('11111111111')
+
+    
     # # 마이크 권한 안내 메시지  
     # st.info("🎧 마이크 사용을 허용해주세요. 처음 실행시 브라우저의 마이크 권한을 허용해야 합니다.")  
     
     # 오디오 녹음 컴포넌트  
     status_placeholder.write("🎧 아래 버튼을 클릭하고 말씀해주세요...")  
-    print('2222222222222')
+
     
-    print('3333333')
     # # audio_recorder 컴포넌트 추가  
     audio_bytes = audio_recorder(  
         pause_threshold=2.0,  # 2초 동안 소리가 없으면 자동 정지  
@@ -152,11 +152,11 @@ def speech_to_text():
     
     # 녹음된 오디오가 있을 경우 처리  
     # if audio_bytes:
-    #     print('aaaaaaaaaaaaaa')
+    
     try:  
         # 잠시 대기하여 브라우저 처리 시간 제공  
         time.sleep(0.5)
-        print('bbbbbbbb')
+
         
         # 녹음된 오디오 재생 가능하게 표시  
         st.audio(audio_bytes, format="audio/wav")  
@@ -170,7 +170,7 @@ def speech_to_text():
         
         # 영어 음성 인식 (한국어의 경우 'ko-KR'로 변경)  
         text = r.recognize_google(audio_data, language='en-US')  
-        print(text)
+
         # 성공적으로 변환된 경우  
         status_placeholder.success("음성 인식 완료!")  
         return text.lower()  
@@ -191,7 +191,7 @@ def speech_to_text():
     # #     st.error(f"마이크 접근 오류: {str(e)}")  
     # #     st.info("브라우저의 마이크 권한을 확인해주세요.")  
     # #     return None  
-    # print('llllllllllllllllll')
+
     # return None      
  
 
